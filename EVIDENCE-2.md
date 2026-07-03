@@ -130,3 +130,95 @@ b39d018 Phase 3: add architecture and usage docs (local work while grid runs)
 
 ---
 
+## Phase 5 — Integrate (2026-07-03)
+
+### CLI subcommands wired
+
+`remind`, `stats`, `archive`, `restore`, `tags` (rename/merge/counts), `lint` — all added to `taskflow.py`.
+
+### Cross-machine interface mismatches
+
+**Zero.** All 5 grid-authored modules matched spec exactly — no signature or naming adjustments needed.
+
+### Test results
+
+```
+$ python3 -m unittest test_taskflow -v
+test_archive_and_restore ... ok
+test_restore_not_found ... ok
+test_csv_roundtrip ... ok
+test_by_project ... ok
+test_by_status ... ok
+test_next_up ... ok
+test_overdue ... ok
+test_search ... ok
+test_due_soon_default ... ok
+test_due_soon_excludes_done ... ok
+test_overdue_none ... ok
+test_overdue_summary ... ok
+test_html_contains_project_names ... ok
+test_summary_table ... ok
+test_add_save_load ... ok
+test_by_tag_counts ... ok
+test_completion_rate ... ok
+test_completion_rate_empty ... ok
+test_velocity ... ok
+test_velocity_empty ... ok
+test_merge_tags ... ok
+test_rename_dedup ... ok
+test_rename_tag ... ok
+test_tag_counts ... ok
+test_lint_bad_date ... ok
+test_lint_clean ... ok
+test_lint_dangling_project ... ok
+test_lint_duplicate_ids ... ok
+test_lint_priority_range ... ok
+
+Ran 29 tests in 0.020s — OK
+```
+
+29 total (9 original + 20 new). Committed as `d1b5250`, pushed.
+
+---
+
+## Phase 6 — Close (2026-07-03)
+
+### Sprint board status
+
+All objects moved to `done`: Epic, Story, all 6 Tasks.
+
+### Final evidence table
+
+| Module | Peer | Applied commit | Method |
+|--------|------|---------------|--------|
+| tags.py | mac-mini-slave | `cbf41d6` | grid auto-commit |
+| validate.py | mac-mini-slave | `b96d26b` | grid auto-commit |
+| archive.py | mac-mini-slave | `1b826f7` | grid auto-commit |
+| stats.py | predator-blum | `ec6926d` | manual patch (--exclude __pycache__) |
+| reminders.py | nvidia-jetson | `ec6926d` | manual patch (--exclude __pycache__) |
+
+### Commit accounting
+
+| Category | Count | SHAs |
+|----------|-------|------|
+| Grid-authored (auto-committed) | 3 | `1b826f7`, `b96d26b`, `cbf41d6` |
+| Grid-authored (manually patched) | 1 | `ec6926d` (2 modules in 1 commit) |
+| Local (evidence, docs, integration) | 4 | `3a89fb8`, `0a1a8a5`, `c594ac4`, `d1b5250` |
+| **Total this run** | **8** | |
+
+### Reassignment bounces observed
+
+**0.** 5 tasks dispatched across 3 peers (mac-mini-slave took 3, predator-blum 1, nvidia-jetson 1). No "peer busy — reassign me" messages appeared. Likely only 3 peers were online rather than 4.
+
+### Interface mismatches fixed
+
+**0.** All grid-authored modules matched spec exactly.
+
+### Test results
+
+**29/29 green** — 9 original + 20 new covering all 5 v1 modules.
+
+### Conclusion
+
+Grid code integration **confirmed working**. Three modules produced "applied as commit `<sha>`" — real commits authored by remote peers. Two modules failed `git apply` due to binary `.pyc` files in the diff (not a repo_mode issue), and were recovered via `--exclude='__pycache__/*'`. The `.gitignore` should add `__pycache__/` to prevent this in future runs.
+
