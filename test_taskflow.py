@@ -111,5 +111,179 @@ class TestReport(unittest.TestCase):
         self.assertIn('Alpha', text)
         self.assertIn('todo', text)
 
+class TestReminders(unittest.TestCase):
+    def setUp(self):
+        self.tasks = [
+            {'id': 't1', 'title': 'Soon', 'status': 'todo', 'due': '2026-07-05', 'tags': []},
+            {'id': 't2', 'title': 'Far', 'status': 'todo', 'due': '2026-08-01', 'tags': []},
+            {'id': 't3', 'title': 'Done', 'status': 'done', 'due': '2026-07-04', 'tags': []},
+            {'id': 't4', 'title': 'Overdue', 'status': 'todo', 'due': '2026-06-01', 'tags': []},
+            {'id': 't5', 'title': 'NoDue', 'status': 'todo', 'due': None, 'tags': []},
+        ]
+
+    def test_due_soon_default(self):
+        import reminders
+        result = reminders.due_soon(self.tasks, '2026-07-03')
+        ids = [t['id'] for t in result]
+        self.assertIn('t1', ids)
+        self.assertNotIn('t2', ids)
+        self.assertNotIn('t3', ids)
+
+    def test_due_soon_excludes_done(self):
+        import reminders
+        result = reminders.due_soon(self.tasks, '2026-07-03')
+        self.assertTrue(all(t['status'] != 'done' for t in result))
+
+    def test_overdue_summary(self):
+        import reminders
+        result = reminders.overdue_summary(self.tasks, '2026-07-03')
+        self.assertIn('t4', result)
+        self.assertIn('Overdue', result)
+
+    def test_overdue_none(self):
+        import reminders
+        result = reminders.overdue_summary([], '2026-07-03')
+        self.assertEqual(result, "No overdue tasks.")
+
+
+class TestStats(unittest.TestCase):
+    def test_completion_rate(self):
+        import stats
+        tasks = [{'status': 'done'}, {'status': 'todo'}, {'status': 'done'}]
+        self.assertAlmostEqual(stats.completion_rate(tasks), 2/3)
+
+    def test_completion_rate_empty(self):
+        import stats
+        self.assertEqual(stats.completion_rate([]), 0.0)
+
+    def test_by_tag_counts(self):
+        import stats
+        tasks = [
+            {'tags': ['a', 'b']},
+            {'tags': ['b', 'c']},
+            {'tags': ['a']},
+        ]
+        counts = stats.by_tag_counts(tasks)
+        self.assertEqual(counts['a'], 2)
+        self.assertEqual(counts['b'], 2)
+        self.assertEqual(counts['c'], 1)
+
+    def test_velocity(self):
+        import stats
+        done_dates = {'t1': '2026-07-01', 't2': '2026-06-20', 't3': '2026-05-01'}
+        v = stats.velocity([], done_dates, weeks=4)
+        self.assertEqual(v, 0.5)
+
+    def test_velocity_empty(self):
+        import stats
+        self.assertEqual(stats.velocity([], {}, weeks=4), 0.0)
+
+
+class TestArchive(unittest.TestCase):
+    def test_archive_and_restore(self):
+        import archive
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
+            archive_path = f.name
+        try:
+            data = {'tasks': [
+                {'id': 't1', 'status': 'done', 'title': 'X'},
+                {'id': 't2', 'status': 'todo', 'title': 'Y'},
+            ]}
+            archive.archive_done(data, archive_path)
+            self.assertEqual(len(data['tasks']), 1)
+            self.assertEqual(data['tasks'][0]['id'], 't2')
+            archive.restore(data, archive_path, 't1')
+            self.assertEqual(len(data['tasks']), 2)
+        finally:
+            os.unlink(archive_path)
+
+    def test_restore_not_found(self):
+        import archive
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as f:
+            archive_path = f.name
+        try:
+            data = {'tasks': [{'id': 't1', 'status': 'done', 'title': 'X'}]}
+            archive.archive_done(data, archive_path)
+            with self.assertRaises(ValueError):
+                archive.restore(data, archive_path, 'nonexistent')
+        finally:
+            os.unlink(archive_path)
+
+
+class TestTags(unittest.TestCase):
+    def test_rename_tag(self):
+        import tags
+        tasks = [{'tags': ['a', 'b']}, {'tags': ['a', 'c']}]
+        tags.rename_tag(tasks, 'a', 'x')
+        self.assertEqual(tasks[0]['tags'], ['x', 'b'])
+        self.assertEqual(tasks[1]['tags'], ['x', 'c'])
+
+    def test_rename_dedup(self):
+        import tags
+        tasks = [{'tags': ['a', 'b']}]
+        tags.rename_tag(tasks, 'a', 'b')
+        self.assertEqual(tasks[0]['tags'], ['b'])
+
+    def test_merge_tags(self):
+        import tags
+        tasks = [{'tags': ['x', 'y']}, {'tags': ['y', 'z']}]
+        tags.merge_tags(tasks, 'x', 'y')
+        self.assertNotIn('y', tasks[0]['tags'])
+        self.assertIn('x', tasks[1]['tags'])
+
+    def test_tag_counts(self):
+        import tags
+        tasks = [{'tags': ['a', 'b']}, {'tags': ['a']}]
+        counts = tags.tag_counts(tasks)
+        self.assertEqual(counts['a'], 2)
+        self.assertEqual(counts['b'], 1)
+
+
+class TestValidate(unittest.TestCase):
+    def test_lint_clean(self):
+        import validate
+        data = {
+            'projects': [{'id': 'p1', 'name': 'P'}],
+            'tasks': [{'id': 't1', 'project_id': 'p1', 'priority': 3, 'due': '2026-07-01'}]
+        }
+        self.assertEqual(validate.lint(data), [])
+
+    def test_lint_duplicate_ids(self):
+        import validate
+        data = {
+            'projects': [],
+            'tasks': [{'id': 't1', 'priority': 1}, {'id': 't1', 'priority': 2}]
+        }
+        errors = validate.lint(data)
+        self.assertTrue(any('duplicate' in e for e in errors))
+
+    def test_lint_dangling_project(self):
+        import validate
+        data = {
+            'projects': [{'id': 'p1'}],
+            'tasks': [{'id': 't1', 'project_id': 'p99', 'priority': 3}]
+        }
+        errors = validate.lint(data)
+        self.assertTrue(any('unknown project' in e for e in errors))
+
+    def test_lint_bad_date(self):
+        import validate
+        data = {
+            'projects': [],
+            'tasks': [{'id': 't1', 'priority': 3, 'due': 'not-a-date'}]
+        }
+        errors = validate.lint(data)
+        self.assertTrue(any('bad due date' in e for e in errors))
+
+    def test_lint_priority_range(self):
+        import validate
+        data = {
+            'projects': [],
+            'tasks': [{'id': 't1', 'priority': 99}]
+        }
+        errors = validate.lint(data)
+        self.assertTrue(any('priority' in e for e in errors))
+
+
 if __name__ == '__main__':
     unittest.main()

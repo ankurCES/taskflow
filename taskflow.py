@@ -6,6 +6,11 @@ import store
 import query
 import report
 import importer
+import reminders
+import stats
+import archive as archive_mod
+import tags
+import validate
 
 DEFAULT_STORE = 'taskflow.json'
 
@@ -76,6 +81,67 @@ def cmd_import(args):
     store.save(data, args.store)
     print(f"Imported {len(tasks)} tasks.")
 
+def cmd_remind(args):
+    from datetime import date
+    data = store.load(args.store)
+    today = args.today or date.today().isoformat()
+    soon = reminders.due_soon(data['tasks'], today, days=args.days)
+    if soon:
+        print(f"Tasks due within {args.days} days:")
+        for t in soon:
+            print(f"  [{t['id']}] {t['title']} (due {t['due']})")
+    else:
+        print("No upcoming tasks.")
+    summary = reminders.overdue_summary(data['tasks'], today)
+    print(summary)
+
+def cmd_stats(args):
+    data = store.load(args.store)
+    rate = stats.completion_rate(data['tasks'])
+    print(f"Completion rate: {rate:.0%}")
+    tc = stats.by_tag_counts(data['tasks'])
+    if tc:
+        print("Tag counts:")
+        for tag, count in sorted(tc.items()):
+            print(f"  {tag}: {count}")
+
+def cmd_archive(args):
+    data = store.load(args.store)
+    archive_mod.archive_done(data, args.archive_path)
+    store.save(data, args.store)
+    print(f"Archived done tasks to {args.archive_path}")
+
+def cmd_restore(args):
+    data = store.load(args.store)
+    archive_mod.restore(data, args.archive_path, args.task_id)
+    store.save(data, args.store)
+    print(f"Restored task {args.task_id}")
+
+def cmd_tags(args):
+    data = store.load(args.store)
+    if args.tags_action == 'rename':
+        tags.rename_tag(data['tasks'], args.old, args.new)
+        store.save(data, args.store)
+        print(f"Renamed tag '{args.old}' → '{args.new}'")
+    elif args.tags_action == 'merge':
+        tags.merge_tags(data['tasks'], args.into, args.from_tag)
+        store.save(data, args.store)
+        print(f"Merged tag '{args.from_tag}' into '{args.into}'")
+    elif args.tags_action == 'counts':
+        tc = tags.tag_counts(data['tasks'])
+        for tag, count in sorted(tc.items()):
+            print(f"{tag}: {count}")
+
+def cmd_lint(args):
+    data = store.load(args.store)
+    errors = validate.lint(data)
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        sys.exit(1)
+    else:
+        print("All clean.")
+
 def main():
     parser = argparse.ArgumentParser(prog='taskflow', description='Project/task manager')
     parser.add_argument('--store', default=DEFAULT_STORE, help='JSON store path')
@@ -103,6 +169,31 @@ def main():
     p_import = sub.add_parser('import')
     p_import.add_argument('file')
 
+    p_remind = sub.add_parser('remind')
+    p_remind.add_argument('--today', default=None)
+    p_remind.add_argument('--days', type=int, default=3)
+
+    sub.add_parser('stats')
+
+    p_archive = sub.add_parser('archive')
+    p_archive.add_argument('--archive-path', default='archive.json')
+
+    p_restore = sub.add_parser('restore')
+    p_restore.add_argument('task_id')
+    p_restore.add_argument('--archive-path', default='archive.json')
+
+    p_tags = sub.add_parser('tags')
+    tags_sub = p_tags.add_subparsers(dest='tags_action')
+    p_tags_rename = tags_sub.add_parser('rename')
+    p_tags_rename.add_argument('old')
+    p_tags_rename.add_argument('new')
+    p_tags_merge = tags_sub.add_parser('merge')
+    p_tags_merge.add_argument('into')
+    p_tags_merge.add_argument('from_tag')
+    tags_sub.add_parser('counts')
+
+    sub.add_parser('lint')
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -111,6 +202,8 @@ def main():
     cmds = {
         'add': cmd_add, 'list': cmd_list, 'done': cmd_done,
         'report': cmd_report, 'export': cmd_export, 'import': cmd_import,
+        'remind': cmd_remind, 'stats': cmd_stats, 'archive': cmd_archive,
+        'restore': cmd_restore, 'tags': cmd_tags, 'lint': cmd_lint,
     }
     cmds[args.command](args)
 
