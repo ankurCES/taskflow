@@ -1,0 +1,34 @@
+diff --git a/__pycache__/stats.cpython-314.pyc b/__pycache__/stats.cpython-314.pyc
+new file mode 100644
+index 0000000..ca88db4
+Binary files /dev/null and b/__pycache__/stats.cpython-314.pyc differ
+diff --git a/stats.py b/stats.py
+new file mode 100644
+index 0000000..4af9afb
+--- /dev/null
++++ b/stats.py
+@@ -0,0 +1,23 @@
++from datetime import date, timedelta
++
++def completion_rate(tasks):
++    if not tasks:
++        return 0.0
++    done = sum(1 for t in tasks if t.get('status') == 'done')
++    return done / len(tasks)
++
++def by_tag_counts(tasks):
++    counts = {}
++    for t in tasks:
++        for tag in t.get('tags', []):
++            counts[tag] = counts.get(tag, 0) + 1
++    return counts
++
++def velocity(tasks, done_dates, weeks=4):
++    if not done_dates:
++        return 0.0
++    max_date = max(date.fromisoformat(d) for d in done_dates.values())
++    cutoff = max_date - timedelta(weeks=weeks)
++    recent = sum(1 for d in done_dates.values()
++                 if cutoff <= date.fromisoformat(d) <= max_date)
++    return recent / weeks
+\ No newline at end of file

@@ -1,0 +1,47 @@
+diff --git a/validate.py b/validate.py
+new file mode 100644
+index 0000000..b65e330
+--- /dev/null
++++ b/validate.py
+@@ -0,0 +1,40 @@
++import re
++from collections import Counter
++
++_DUE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
++
++def lint(data) -> list[str]:
++    errors = []
++    tasks = data.get('tasks', []) or []
++    projects = data.get('projects', []) or []
++    project_ids = {p.get('id') for p in projects if p.get('id') is not None}
++
++    seen_ids = Counter()
++    for t in tasks:
++        tid = t.get('id')
++        if tid is not None:
++            seen_ids[tid] += 1
++
++    for tid, count in seen_ids.items():
++        if count > 1:
++            errors.append(f"duplicate task id: {tid!r} appears {count} times")
++
++    for t in tasks:
++        tid = t.get('id', '<no-id>')
++        pid = t.get('project_id')
++        if pid is not None and project_ids and pid not in project_ids:
++            errors.append(f"task {tid!r} references unknown project_id {pid!r}")
++
++    for t in tasks:
++        tid = t.get('id', '<no-id>')
++        due = t.get('due')
++        if due is not None and not (isinstance(due, str) and _DUE_RE.match(due)):
++            errors.append(f"task {tid!r} has bad due date {due!r} (expected YYYY-MM-DD or None)")
++
++    for t in tasks:
++        tid = t.get('id', '<no-id>')
++        priority = t.get('priority', 0)
++        if not isinstance(priority, int) or isinstance(priority, bool) or priority < 1 or priority > 5:
++            errors.append(f"task {tid!r} has out-of-range priority {priority!r} (expected int 1-5)")
++
++    return errors
+\ No newline at end of file
