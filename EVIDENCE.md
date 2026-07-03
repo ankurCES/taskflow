@@ -33,3 +33,39 @@ Epic: taskflow v0
 ```
 
 All 5 module tasks are independent (no inter-dependencies). Task 6 depends on all 5.
+
+## Phase 2 — Grid fanout (2026-07-03T16:59:43Z)
+
+**lumi_sprint_grid_fanout response (verbatim):**
+
+```json
+{
+  "dispatched": 5,
+  "mode": "async",
+  "note": "running on the grid — results land as [grid:…] comments on each task",
+  "tasks": [
+    {"id": "3d942e57-e78c-4384-9607-722194fa76ee", "peer": "10.0.0.150",       "title": "models.py"},
+    {"id": "4d16d700-47b0-44a6-bdfc-aef09e15e1e0", "peer": "nvidia-jetson",    "title": "query.py"},
+    {"id": "7dacd200-54bd-4f7e-8a05-3bad1611ab9f", "peer": "predator-blum",    "title": "importer.py"},
+    {"id": "803503ff-c192-4f2d-a741-778f85c09e10", "peer": "mac-mini-slave",   "title": "store.py"},
+    {"id": "97b11899-5107-4052-98c6-038f3f847172", "peer": "10.0.0.150",       "title": "report.py"}
+  ]
+}
+```
+
+Call returned IMMEDIATELY (async mode). Lead was NOT blocked — proceeded to Phase 3 local work.
+Dispatch map: models.py→10.0.0.150, query.py→nvidia-jetson, importer.py→predator-blum, store.py→mac-mini-slave, report.py→10.0.0.150.
+budget_secs: 600.
+
+## Phase 3 — Local work while grid runs (2026-07-03T17:00:29Z)
+
+**Overlap proof:**
+- Grid fanout dispatched at: 2026-07-03T16:59:43Z (async, non-blocking)
+- Local docs committed at: 2026-07-03T17:00:29Z (commit b39d018)
+- Grid tasks still running at time of local commit (budget_secs=600 → grid deadline ~17:09:43Z)
+
+**Files written locally:**
+- `docs/ARCHITECTURE.md` — module interfaces + data shapes
+- `docs/USAGE.md` — planned CLI commands
+
+Local and remote work overlapped by design: lead wrote docs while 5 peers built modules.
