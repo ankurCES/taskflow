@@ -69,3 +69,99 @@ budget_secs: 600.
 - `docs/USAGE.md` — planned CLI commands
 
 Local and remote work overlapped by design: lead wrote docs while 5 peers built modules.
+
+## Phase 4 — Collect + stitch (2026-07-03T17:08Z)
+
+### Peer completion results
+
+**store.py — mac-mini-slave (Ankurs-Mac-mini.local)**
+- [grid:mac-mini-slave] completed at 17:00:32Z
+- Host: Ankurs-Mac-mini.local, Darwin arm64
+- Result: PASS (8/8 assertions)
+- Diffs NOT auto-applied to local repo (no .lumi/grid-diffs/ directory found)
+
+**query.py — nvidia-jetson (openclaw-jet)**
+- [grid:nvidia-jetson] completed at 17:01:12Z
+- Committed at /home/openclaw/sprint as commit a472bc5
+- All 5 pure functions verified by in-script assertion suite
+- Diffs NOT auto-applied locally
+
+**importer.py — predator-blum (ankur-Predator-PHN16S-71)**
+- [grid:predator-blum] completed at 17:01:05Z
+- 11 round-trip/edge-case tests passed; stdlib-only verified by AST scan
+- Diffs NOT auto-applied locally
+
+**models.py — 10.0.0.150 (no completion comment after ~9 minutes)**
+- Peer 10.0.0.150 received 2 tasks (models.py + report.py) — ran sequentially
+- No [grid:…] comment returned within polling window
+- Reconciled locally by lead
+
+**report.py — 10.0.0.150 (no completion comment after ~9 minutes)**
+- Same peer, same situation as models.py
+- Reconciled locally by lead
+
+### Reconciliation
+
+Grid diffs were NOT auto-applied as local commits — no .lumi/grid-diffs/ directory existed.
+All 5 modules written locally by the lead, matching the task specifications.
+Committed as 6fdbe7a: "Add 5 core modules (reconciled from grid peer work — diffs not auto-applied)"
+
+### Interface mismatches noted during reconciliation
+
+1. **validate_task() — dict vs dataclass**: Task descriptions said dataclass instances, but query/store/importer all operate on plain dicts. Resolved: validate_task() takes a dict (consistent with all other modules).
+2. **No mismatches** between store/query/importer/report — all use plain dicts with the same key schema.
+
+### git log after stitch
+
+```
+6fdbe7a Add 5 core modules (reconciled from grid peer work — diffs not auto-applied)
+9e1f6e7 Phase 2+3 evidence: grid fanout + local docs overlap
+b39d018 Phase 3: add architecture and usage docs (local work while grid runs)
+664f088 Phase 1: board plan with epic, story, 6 tasks
+2053bf9 init
+```
+
+All 5 module tasks moved to done on the board. Task 6 (CLI + integration tests) now unblocked.
+
+## Phase 5 — Integrate (2026-07-03T17:10Z)
+
+### CLI (taskflow.py)
+Built argparse CLI wiring all 5 modules:
+- `add` — creates task with --project, --title, --priority, --due, --tags
+- `list` — lists tasks with optional --status, --project filters
+- `done` — marks task done by id
+- `report` — prints text summary table
+- `export` — CSV to stdout; `--html` → writes dashboard.html
+- `import` — imports from CSV file
+
+### Integration tests (test_taskflow.py)
+9 tests, all passing:
+
+```
+test_csv_roundtrip (test_taskflow.TestCSV.test_csv_roundtrip) ... ok
+test_by_project (test_taskflow.TestQuery.test_by_project) ... ok
+test_by_status (test_taskflow.TestQuery.test_by_status) ... ok
+test_next_up (test_taskflow.TestQuery.test_next_up) ... ok
+test_overdue (test_taskflow.TestQuery.test_overdue) ... ok
+test_search (test_taskflow.TestQuery.test_search) ... ok
+test_html_contains_project_names (test_taskflow.TestReport.test_html_contains_project_names) ... ok
+test_summary_table (test_taskflow.TestReport.test_summary_table) ... ok
+test_add_save_load (test_taskflow.TestRoundtrip.test_add_save_load) ... ok
+----------------------------------------------------------------------
+Ran 9 tests in 0.008s
+OK
+```
+
+### Interface mismatch fixed during integration
+- **store.load() on empty file**: NamedTemporaryFile creates a 0-byte file → json.load fails. Fixed: added `os.path.getsize(path) == 0` check to return empty structure.
+
+### Sample dashboard generated
+dashboard.html produced from sample data (2 projects, 6 tasks). Text summary:
+```
+Project          | todo | in_progress | done | total
+----------------------------------------------------
+API Backend      |    2 |           0 |    1 |     3
+Website Redesign |    1 |           1 |    1 |     3
+----------------------------------------------------
+Total            |    3 |           1 |    2 |     6
+```

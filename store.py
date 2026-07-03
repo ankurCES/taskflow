@@ -3,7 +3,7 @@ import os
 import tempfile
 
 def load(path):
-    if not os.path.exists(path):
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
         return {"projects": [], "tasks": []}
     with open(path, 'r') as f:
         return json.load(f)
